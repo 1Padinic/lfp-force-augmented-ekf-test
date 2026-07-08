@@ -2,8 +2,6 @@
 
 A simulation study of SOC estimation on a pack of LFP cells. It compares a **fair, resistance-estimating baseline** voltage + coulomb-counting EKF against a 3-state EKF that additionally folds in per-cell force measurements and opportunistic ICA (dQ/dV) anchoring. The two extra ideas come from Fly & Chen (2020) and Jia et al. (2024); this puts them together and stress-tests the result.
 
-**On "fair":** an earlier version of this comparison gave the baseline filter only one state (SOC) and a fixed, wrong resistance guess, while the enhanced filter got three states including its own resistance estimate. That's not a clean test of what force+ICA fusion contributes — a chunk of the enhanced filter's old advantage was really just "it also gets to estimate resistance." The baseline here now estimates resistance too, using the exact same voltage-update math as the enhanced filter's own voltage channel. Whatever gap remains between the two is attributable to force and ICA fusion specifically, not resistance estimation.
-
 **SOH is intentionally out of scope.** Cells still differ in true capacity/health in the ground-truth simulation (that's what makes the "dodgy supplier" pack realistic), but neither filter estimates or reports SOH. A real BMS would use a dedicated method for that (capacity test, aging-trend analysis, etc.). Both filters here coulomb-count against the same nameplate capacity, so any gap between them comes purely from the voltage/force/ICA measurement channels.
 
 ## The scenario
@@ -61,7 +59,7 @@ Full numbers, plots, and the observability argument in more depth are in `REPORT
 
 ## Ground truth: what the filter never sees
 
-To dodge the inverse-crime trap where filter and simulation quietly share a model, the ground-truth pack carries mismatches the filter doesn't know about:
+Easy way to fool yourself in a simulation study: let the filter and the "truth" secretly share the same model, so of course it looks great. To avoid that, the ground-truth pack carries a bunch of mismatches the filter is never told about:
 
 - Per-cell true capacity spread over SOH 0.80–1.00 — this is where the "dodgy supplier" cell-to-cell spread actually lives. It changes each cell's true OCV/SOC trajectory; the filter never sees the SOH number itself.
 - Per-cell OCV curves with small V-axis offsets and slope tilts.
@@ -180,7 +178,7 @@ The gap between this and something deployable is real. Laying it out plainly.
 
 **Kalman filters aren't AI.** They're optimal linear estimators, and they won't rescue you from a measurement that carries no information — nor do extra measurement channels help when the ones you already have are sufficient. Both directions of that showed up in this study.
 
-**The duty-cycle model matters as much as the estimator.** An earlier FCR profile modelled continuous ±0.5C oscillation, which is unphysical and hid the real story. Real FCR sits inside the frequency deadband most of the time, and fixing that also happens to be exactly the kind of current profile (frequent, sharp reversals) where the fair baseline turns out to do just fine on its own.
+**Force and ICA fusion have real potential, just not everywhere.** The scenarios where they clearly pay off are the ones where the electrical signals alone can't pin down resistance and SOC together — smooth, slowly-varying current, or (per §6) not knowing initial SOC at all. That second case matters in practice: a lot of real deployments genuinely don't get a clean warm start (second-life packs, unknown provenance, a BMS that lost state after a fault), and that's exactly the regime where an independent, non-electrical signal is worth the added hardware.
 
 **Honest simulation is harder than it looks.** Early versions had the enhanced filter hitting 0.5% error in five minutes. Too good. Adding the diffusion term, per-cell OCV offsets, and the current-sensor bias pulled the numbers into a believable range — and re-litigating the baseline's fairness pulled the *comparison* into a believable range too.
 
@@ -205,4 +203,4 @@ See `REPORT.md` for the full write-up, including the observability argument for 
 
 ---
 
-*On the code: I can script fine, I just don't enjoy it. The plotting boilerplate and the einsum-heavy vectorisation were written with heavy AI assistance under my direction — faster than typing it all out myself. The algorithm design, the ground-truth model, the physics calls, the decision to redo the baseline once the original comparison was called out as unfair, and the interpretation, are mine, mistakes included.*
+*On the code: it was written using AI, highly supervised — though I'd rather it hadn't needed to be that way. Yes, I'm lazy. The algorithm design, the ground-truth model, the physics calls, the decision to redo the baseline once the original comparison was called out as unfair, and the interpretation, are mine, mistakes included.*
